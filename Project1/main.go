@@ -31,12 +31,12 @@ func main() {
 		return
 	}
 
-	fmt.Printf("pathname: %s, M: %s, N: %s, C: %s\n", pathname, M, N, C)
+	fmt.Printf("pathname: %d, M: %d, N: %d, C: %d\n", pathname, M, N, C)
 
-	fmt.Println(isPrime(7))
-	fmt.Println(isPrime(10))
-	fmt.Println(isPrime(2))
-	fmt.Println(isPrime(1))
+	// fmt.Println(isPrime(7))
+	// fmt.Println(isPrime(10))
+	// fmt.Println(isPrime(2))
+	// fmt.Println(isPrime(1))
 }
 
 func isPrime(n uint64) bool {
@@ -91,5 +91,41 @@ func worker(id int, C int, jobsCh <-chan Job, resultsCh chan<- Result, wg *sync.
 	time.Sleep(time.Duration(400+rand.Intn(200)) * time.Millisecond)
 	for job := range jobsCh {
 		// Simulate processing the job
+		file, err := os.Open(job.Pathname)
+		if err != nil {
+			fmt.Printf("Worker %d: Error opening file: %v\n", id, err)
+			continue
+		}
+		defer file.Close()
+
+		_, err = file.Seek(job.Start, 0)
+		if err != nil {
+			fmt.Printf("Worker %d: Error seeking file: %v\n", id, err)
+			continue
+		}
+
+		// Creating a buffer of size C and reading from the file
+		buffer := make([]byte, C)
+		bytesProcessed := int64(0)
+		for {
+			if bytesProcessed >= job.Length {
+				break
+			}
+			length := int64(C)
+			if bytesProcessed+length > job.Length {
+				length = job.Length - bytesProcessed
+			}
+			bytesRead, err := file.Read(buffer[:length])
+			if err != nil {
+				fmt.Printf("Worker %d: Error reading file: %v\n", id, err)
+				break
+			}
+			if bytesRead == 0 {
+				break
+			}
+
+			bytesProcessed += int64(bytesRead)
+		}
+
 	}
 }
