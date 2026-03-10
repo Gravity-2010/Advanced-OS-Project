@@ -16,26 +16,33 @@ import (
 func main() {
 	pathname := os.Args[1]
 
+	M := 1
+	N := 65536
+	C := 1024
+
 	var err error
-	M, err := strconv.Atoi(os.Args[2])
-	if err != nil {
-		fmt.Printf("Error converting M to integer: %v\n", err)
-		return
+	if len(os.Args) > 2 {
+		M, err = strconv.Atoi(os.Args[2])
+		if err != nil {
+			fmt.Printf("Error converting M: %v\n", err)
+			return
+		}
 	}
-
-	N, err := strconv.Atoi(os.Args[3])
-	if err != nil {
-		fmt.Printf("Error converting N to integer: %v\n", err)
-		return
+	if len(os.Args) > 3 {
+		N, err = strconv.Atoi(os.Args[3])
+		if err != nil {
+			fmt.Printf("Error converting N: %v\n", err)
+			return
+		}
 	}
-
-	C, err := strconv.Atoi(os.Args[4])
-	if err != nil {
-		fmt.Printf("Error converting C to integer: %v\n", err)
-		return
+	if len(os.Args) > 4 {
+		C, err = strconv.Atoi(os.Args[4])
+		if err != nil {
+			fmt.Printf("Error converting C: %v\n", err)
+			return
+		}
 	}
-
-	fmt.Printf("pathname: %d, M: %d, N: %d, C: %d\n", pathname, M, N, C)
+	fmt.Printf("pathname: %s, M: %d, N: %d, C: %d\n", pathname, M, N, C)
 
 	// fmt.Println(isPrime(7))
 	// fmt.Println(isPrime(10))
@@ -49,7 +56,7 @@ func main() {
 	var wg sync.WaitGroup
 	wg.Add(M)
 
-	go dispatcher(pathname, C, jobsCh)
+	go dispatcher(pathname, N, jobsCh)
 
 	for i := 0; i < M; i++ {
 		go worker(i, C, jobsCh, resultsCh, &wg)
