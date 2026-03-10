@@ -41,6 +41,29 @@ func main() {
 	// fmt.Println(isPrime(10))
 	// fmt.Println(isPrime(2))
 	// fmt.Println(isPrime(1))
+
+	jobsCh := make(chan Job, M)
+	resultsCh := make(chan Result, M)
+	totalCh := make(chan int)
+
+	var wg sync.WaitGroup
+	wg.Add(M)
+
+	go dispatcher(pathname, C, jobsCh)
+
+	for i := 0; i < M; i++ {
+		go worker(i, C, jobsCh, resultsCh, &wg)
+	}
+
+	go func() {
+		wg.Wait()
+		close(resultsCh)
+	}()
+
+	go consolidator(resultsCh, totalCh)
+
+	totalPrimes := <-totalCh
+	fmt.Printf("Total prime numbers found: %d\n", totalPrimes)
 }
 
 func isPrime(n uint64) bool {
@@ -165,4 +188,13 @@ func worker(id int, C int, jobsCh <-chan Job, resultsCh chan<- Result, wg *sync.
 			"prime_count", primeCount,
 		)
 	}
+}
+
+// COnsolidating the results
+func consolidator(resultCh <-chan Result, totalCh chan<- int) {
+	totalPrimes := 0
+	for result := range resultCh {
+		totalPrimes += result.Primecount
+	}
+	totalCh <- totalPrimes
 }
