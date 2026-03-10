@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"io"
+	"log/slog"
 	"math/rand"
 	"os"
 	"strconv"
@@ -98,11 +100,11 @@ func worker(id int, C int, jobsCh <-chan Job, resultsCh chan<- Result, wg *sync.
 			fmt.Printf("Worker %d: Error opening file: %v\n", id, err)
 			continue
 		}
-		defer file.Close()
 
 		_, err = file.Seek(job.Start, 0)
 		if err != nil {
 			fmt.Printf("Worker %d: Error seeking file: %v\n", id, err)
+			file.Close()
 			continue
 		}
 
@@ -132,7 +134,11 @@ func worker(id int, C int, jobsCh <-chan Job, resultsCh chan<- Result, wg *sync.
 			var num uint64
 			for {
 				err = binary.Read(reader, binary.LittleEndian, &num)
+				if err == io.EOF {
+					break
+				}
 				if err != nil {
+					fmt.Printf("Worker %d: Error reading number from buffer: %v\n", id, err)
 					break
 				}
 				if isPrime(num) {
@@ -143,11 +149,20 @@ func worker(id int, C int, jobsCh <-chan Job, resultsCh chan<- Result, wg *sync.
 			bytesProcessed += int64(bytesRead)
 		}
 
+		file.Close()
+
 		// Send the result back to the results channel
 		resultsCh <- Result{
 			Job:        job,
 			Primecount: primeCount,
 		}
 
+		slog.Info("Job completed",
+			"worker_id", id,
+			"pathname", job.Pathname,
+			"start", job.Start,
+			"length", job.Length,
+			"prime_count", primeCount,
+		)
 	}
 }
