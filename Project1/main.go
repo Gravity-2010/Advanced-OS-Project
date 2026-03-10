@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/binary"
 	"fmt"
 	"math/rand"
 	"os"
@@ -106,6 +108,7 @@ func worker(id int, C int, jobsCh <-chan Job, resultsCh chan<- Result, wg *sync.
 
 		// Creating a buffer of size C and reading from the file
 		buffer := make([]byte, C)
+		primeCount := 0
 		bytesProcessed := int64(0)
 		for {
 			if bytesProcessed >= job.Length {
@@ -124,7 +127,26 @@ func worker(id int, C int, jobsCh <-chan Job, resultsCh chan<- Result, wg *sync.
 				break
 			}
 
+			reader := bytes.NewReader(buffer[:bytesRead])
+
+			var num uint64
+			for {
+				err = binary.Read(reader, binary.LittleEndian, &num)
+				if err != nil {
+					break
+				}
+				if isPrime(num) {
+					primeCount++
+				}
+			}
+
 			bytesProcessed += int64(bytesRead)
+		}
+
+		// Send the result back to the results channel
+		resultsCh <- Result{
+			Job:        job,
+			Primecount: primeCount,
 		}
 
 	}
