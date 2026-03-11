@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math/big"
 	"math/rand"
 	"os"
+	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -44,14 +46,13 @@ func main() {
 	}
 	fmt.Printf("pathname: %s, M: %d, N: %d, C: %d\n", pathname, M, N, C)
 
-	// fmt.Println(isPrime(7))
-	// fmt.Println(isPrime(10))
-	// fmt.Println(isPrime(2))
-	// fmt.Println(isPrime(1))
+	start := time.Now()
 
 	jobsCh := make(chan Job, M)
 	resultsCh := make(chan Result, M)
 	totalCh := make(chan int)
+
+	jobCounts := make([]int, M)
 
 	var wg sync.WaitGroup
 	wg.Add(M)
@@ -59,7 +60,7 @@ func main() {
 	go dispatcher(pathname, N, jobsCh)
 
 	for i := 0; i < M; i++ {
-		go worker(i, C, jobsCh, resultsCh, &wg)
+		go worker(i, C, jobsCh, resultsCh, &wg, jobCounts)
 	}
 
 	go func() {
@@ -70,19 +71,49 @@ func main() {
 	go consolidator(resultsCh, totalCh)
 
 	totalPrimes := <-totalCh
+	elapsed := time.Since(start)
+
+	// Statistics
+	min, max := jobCounts[0], jobCounts[0]
+	for _, count := range jobCounts {
+		if count < min {
+			min = count
+		}
+		if count > max {
+			max = count
+		}
+	}
+
+	total := 0
+	for _, count := range jobCounts {
+		total += count
+	}
+	average := float64(total) / float64(M)
+
+	sorted := make([]int, M)
+	copy(sorted, jobCounts)
+	sort.Ints(sorted)
+	var median float64
+	if M%2 == 0 {
+		median = float64(sorted[M/2-1]+sorted[M/2]) / 2.0
+	} else {
+		median = float64(sorted[M/2])
+	}
+
 	fmt.Printf("Total prime numbers found: %d\n", totalPrimes)
+	fmt.Printf("Min jobs completed by a worker: %d\n", min)
+	fmt.Printf("Max jobs completed by a worker: %d\n", max)
+	fmt.Printf("Average jobs completed by a worker: %.1f\n", average)
+	fmt.Printf("Median jobs completed by a worker: %.1f\n", median)
+	fmt.Printf("Elapsed time (ms): %d ms\n", elapsed.Milliseconds())
 }
 
 func isPrime(n uint64) bool {
 	if n < 2 {
 		return false
 	}
-	for i := uint64(2); i*i <= n; i++ {
-		if n%i == 0 {
-			return false
-		}
-	}
-	return true
+	bigN := new(big.Int).SetUint64(n)
+	return bigN.ProbablyPrime(20)
 }
 
 type Job struct {
@@ -97,6 +128,8 @@ type Result struct {
 }
 
 func dispatcher(pathname string, L int, jobsCh chan<- Job) {
+	defer close(jobsCh)
+
 	fileInfo, err := os.Stat(pathname)
 	if err != nil {
 		fmt.Printf("Error getting file info: %v\n", err)
@@ -117,15 +150,15 @@ func dispatcher(pathname string, L int, jobsCh chan<- Job) {
 		}
 		jobsCh <- job
 	}
-	close(jobsCh)
 }
 
-func worker(id int, C int, jobsCh <-chan Job, resultsCh chan<- Result, wg *sync.WaitGroup) {
+func worker(id int, C int, jobsCh <-chan Job, resultsCh chan<- Result, wg *sync.WaitGroup, jobCounts []int) {
 	defer wg.Done()
 	time.Sleep(time.Duration(400+rand.Intn(200)) * time.Millisecond)
+	// fmt.Printf("Worker %d started\n", id)
 	for job := range jobsCh {
-		// Simulate processing the job
 		file, err := os.Open(job.Pathname)
+		// fmt.Printf("Worker %d opened file, processing job start=%d length=%d\n", id, job.Start, job.Length)
 		if err != nil {
 			fmt.Printf("Worker %d: Error opening file: %v\n", id, err)
 			continue
@@ -138,7 +171,6 @@ func worker(id int, C int, jobsCh <-chan Job, resultsCh chan<- Result, wg *sync.
 			continue
 		}
 
-		// Creating a buffer of size C and reading from the file
 		buffer := make([]byte, C)
 		primeCount := 0
 		bytesProcessed := int64(0)
@@ -160,7 +192,6 @@ func worker(id int, C int, jobsCh <-chan Job, resultsCh chan<- Result, wg *sync.
 			}
 
 			reader := bytes.NewReader(buffer[:bytesRead])
-
 			var num uint64
 			for {
 				err = binary.Read(reader, binary.LittleEndian, &num)
@@ -180,8 +211,8 @@ func worker(id int, C int, jobsCh <-chan Job, resultsCh chan<- Result, wg *sync.
 		}
 
 		file.Close()
+		jobCounts[id]++
 
-		// Send the result back to the results channel
 		resultsCh <- Result{
 			Job:        job,
 			Primecount: primeCount,
@@ -197,7 +228,7 @@ func worker(id int, C int, jobsCh <-chan Job, resultsCh chan<- Result, wg *sync.
 	}
 }
 
-// COnsolidating the results
+// Consolidating the results
 func consolidator(resultCh <-chan Result, totalCh chan<- int) {
 	totalPrimes := 0
 	for result := range resultCh {

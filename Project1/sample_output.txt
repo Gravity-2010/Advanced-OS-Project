@@ -1,0 +1,13 @@
+Command: go run main.go test_1GB.dat 16 65536 8192
+Output:
+pathname: test_1GB.dat, M: 16, N: 65536, C: 8192
+2026/03/10 23:03:21 INFO Job completed worker_id=1 pathname=test_1GB.dat start=307560448 length=65536 prime_count=175
+2026/03/10 23:03:21 INFO Job completed worker_id=9 pathname=test_1GB.dat start=307757056 length=65536 prime_count=188
+2026/03/10 23:03:21 INFO Job completed worker_id=6 pathname=test_1GB.dat start=307822592 length=65536 prime_count=218
+...
+Total prime numbers found: 3096150
+Min jobs completed by a worker: 1016
+Max jobs completed by a worker: 1033
+Average jobs completed by a worker: 1024.0
+Median jobs completed by a worker: 1024.0
+Elapsed time (ms): 66086 ms
