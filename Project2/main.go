@@ -6,7 +6,9 @@ import (
 	"log"
 	"net"
 	"os"
+	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -131,4 +133,59 @@ func main() {
 	elapsed := time.Since(start)
 	fmt.Printf("Total primes: %d\n", consServer.totalPrimes)
 	fmt.Printf("Elapsed time: %d ms\n", elapsed.Milliseconds())
+
+	counts := consServer.jobCounts
+	sort.Slice(counts, func(i, j int) bool { return counts[i] < counts[j] })
+
+	min := counts[0]
+	max := counts[len(counts)-1]
+
+	sum := int32(0)
+	for _, c := range counts {
+		sum += c
+	}
+	avg := float64(sum) / float64(len(counts))
+
+	n := len(counts)
+	var median float64
+	if n%2 == 0 {
+		median = float64(counts[n/2-1]+counts[n/2]) / 2.0
+	} else {
+		median = float64(counts[n/2])
+	}
+
+	fmt.Printf("Min jobs: %d\n", min)
+	fmt.Printf("Max jobs: %d\n", max)
+	fmt.Printf("Avg jobs: %.1f\n", avg)
+	fmt.Printf("Median jobs: %.1f\n", median)
+}
+
+type Config struct {
+	DispatcherAddr   string
+	ConsolidatorAddr string
+	FileServerAddr   string
+}
+
+func parseConfig(path string) Config {
+	var cfg Config
+	data, err := os.ReadFile(path)
+	if err != nil {
+		log.Fatal(err)
+	}
+	lines := strings.Split(string(data), "\n")
+	for _, line := range lines {
+		parts := strings.Fields(line)
+		if len(parts) < 3 {
+			continue
+		}
+		switch parts[0] {
+		case "dispatcher":
+			cfg.DispatcherAddr = parts[1] + ":" + parts[2]
+		case "consolidator":
+			cfg.ConsolidatorAddr = parts[1] + ":" + parts[2]
+		case "fileserver":
+			cfg.FileServerAddr = parts[1] + ":" + parts[2]
+		}
+	}
+	return cfg
 }
