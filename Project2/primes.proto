@@ -1,0 +1,45 @@
+syntax = "proto3";
+package primes;
+option go_package = "./pb";
+
+message PullRequest {}
+
+message JobResponse {
+    bool  done         = 1;
+    int64 segment_id   = 2;
+    int64 byte_offset  = 3;
+    int64 segment_size = 4;
+    }
+
+message FetchRequest {
+    int64 byte_offset = 1;
+    int64 segment_size = 2;
+    int64 chunk_size   = 3;
+}
+
+message Chunk {
+    bytes data = 1;
+}
+
+message ResultRequest {
+    int64 segment_id = 1;
+    int64 prime_count = 2;
+    int32 jobs_done = 3;
+}
+
+message ResultAck {}
+
+// Service 1: Dispatcher
+service Dispatcher {
+    rpc PullJob (PullRequest) returns (JobResponse);
+}
+
+// Service 2: FileServer
+service FileServer {
+    rpc FetchSegment (FetchRequest) returns (stream Chunk);
+}
+
+// Service 3: Consolidator
+service Consolidator {
+    rpc PushResult (ResultRequest) returns (ResultAck);
+}
