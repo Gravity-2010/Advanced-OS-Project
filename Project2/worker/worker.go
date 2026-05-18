@@ -10,6 +10,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"primes_grpc/pb"
 
@@ -29,6 +30,7 @@ func main() {
 	C, _ := strconv.ParseInt(os.Args[1], 10, 64)
 	cfgPath := os.Args[2]
 	cfg := parseConfig(cfgPath)
+	workerId := int32(os.Getpid())
 
 	dispConn, _ := grpc.Dial(cfg.DispatcherAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	fileConn, _ := grpc.Dial(cfg.FileServerAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -44,23 +46,46 @@ func main() {
 	jobsDone := int32(0)
 
 	for {
-		job, err := dispClient.PullJob(context.Background(), &pb.PullRequest{})
-		if err != nil {
-			log.Fatalf("PullJob error: %v", err)
+		// ① PullJob with retry (max 10 attempts)
+		var job *pb.JobResponse
+		retries := 0
+		for {
+			var err error
+			job, err = dispClient.PullJob(context.Background(), &pb.PullRequest{})
+			if err == nil {
+				break
+			}
+			retries++
+			if retries > 10 {
+				log.Printf("Dispatcher unavailable, exiting")
+				return
+			}
+			log.Printf("PullJob retrying: %v", err)
+			time.Sleep(500 * time.Millisecond)
 		}
+
+		// Check if no more jobs
 		if job.Done {
 			break
 		}
 
+		// ② FetchSegment with retry + count primes
 		primeCount := int64(0)
-		stream, err := fileClient.FetchSegment(context.Background(), &pb.FetchRequest{
-			ByteOffset:  job.ByteOffset,
-			SegmentSize: job.SegmentSize,
-			ChunkSize:   C,
-		})
-		if err != nil {
-			log.Fatalf("FetchSegment error: %v", err)
+		var stream pb.FileServer_FetchSegmentClient
+		for {
+			var err error
+			stream, err = fileClient.FetchSegment(context.Background(), &pb.FetchRequest{
+				ByteOffset:  job.ByteOffset,
+				SegmentSize: job.SegmentSize,
+				ChunkSize:   C,
+			})
+			if err == nil {
+				break
+			}
+			log.Printf("FetchSegment retrying: %v", err)
+			time.Sleep(500 * time.Millisecond)
 		}
+
 		for {
 			chunk, err := stream.Recv()
 			if err == io.EOF {
@@ -82,11 +107,13 @@ func main() {
 			}
 		}
 
+		// ③ PushResult
 		jobsDone++
 		consClient.PushResult(context.Background(), &pb.ResultRequest{
 			SegmentId:  job.SegmentId,
 			PrimeCount: primeCount,
 			JobsDone:   jobsDone,
+			WorkerId:   workerId,
 		})
 	}
 }

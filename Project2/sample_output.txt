@@ -1,0 +1,19 @@
+Command: ./run.sh 65536 4096 16 data1gb.dat primes_config.txt
+
+Fileserver output:
+2026/05/05 23:38:12 Fileserver listening on localhost:5003
+
+Main output:
+N: 65536, C: 4096, datafile: data1gb.dat
+2026/05/05 23:38:13 Dispatcher listening on localhost:5001
+2026/05/05 23:38:13 Consolidator listening on localhost:5002
+Total primes: 3101315
+Elapsed time: 80674 ms
+Min jobs: 1014
+Max jobs: 1050
+Avg jobs: 1024.0
+Median jobs: 1020.5
+
+Worker output:
+Starting 16 workers with C=4096 config=primes_config.txt
+All 16 workers finished

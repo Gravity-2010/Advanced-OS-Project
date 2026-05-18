@@ -25,6 +25,7 @@ message ResultRequest {
     int64 segment_id = 1;
     int64 prime_count = 2;
     int32 jobs_done = 3;
+    int32 worker_id   = 4;
 }
 
 message ResultAck {}

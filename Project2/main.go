@@ -36,10 +36,8 @@ func (s *DispatcherServer) start(addr string) {
 	if err != nil {
 		log.Fatalf("Dispatcher listening failed: %v", err)
 	}
-
 	grpcServer := grpc.NewServer()
 	pb.RegisterDispatcherServer(grpcServer, s)
-
 	log.Printf("Dispatcher listening on %s", addr)
 	grpcServer.Serve(lis)
 }
@@ -53,7 +51,7 @@ type ConsolidatorServer struct {
 	expected    int
 	jobQueue    chan *pb.JobResponse
 	done        chan struct{}
-	jobCounts   []int32
+	workerJobs  map[int32]int32
 }
 
 func (s *ConsolidatorServer) PushResult(ctx context.Context, req *pb.ResultRequest) (*pb.ResultAck, error) {
@@ -62,7 +60,7 @@ func (s *ConsolidatorServer) PushResult(ctx context.Context, req *pb.ResultReque
 
 	s.totalPrimes += req.PrimeCount
 	s.received++
-	s.jobCounts = append(s.jobCounts, req.JobsDone)
+	s.workerJobs[req.WorkerId] = req.JobsDone
 
 	if s.received == s.expected {
 		close(s.jobQueue)
@@ -78,7 +76,6 @@ func (s *ConsolidatorServer) start(addr string) {
 	}
 	grpcServer := grpc.NewServer()
 	pb.RegisterConsolidatorServer(grpcServer, s)
-
 	log.Printf("Consolidator listening on %s", addr)
 	grpcServer.Serve(lis)
 }
@@ -118,23 +115,27 @@ func main() {
 
 	dispServer := &DispatcherServer{jobsCh: jobQueue}
 	consServer := &ConsolidatorServer{
-		expected: numSegments,
-		jobQueue: jobQueue,
-		done:     done,
+		expected:   numSegments,
+		jobQueue:   jobQueue,
+		done:       done,
+		workerJobs: make(map[int32]int32),
 	}
 
 	go dispServer.start(cfg.DispatcherAddr)
 	go consServer.start(cfg.ConsolidatorAddr)
 
 	start := time.Now()
-
 	<-done
-
 	elapsed := time.Since(start)
+
 	fmt.Printf("Total primes: %d\n", consServer.totalPrimes)
 	fmt.Printf("Elapsed time: %d ms\n", elapsed.Milliseconds())
 
-	counts := consServer.jobCounts
+	counts := make([]int32, 0, len(consServer.workerJobs))
+	for _, v := range consServer.workerJobs {
+		counts = append(counts, v)
+	}
+
 	sort.Slice(counts, func(i, j int) bool { return counts[i] < counts[j] })
 
 	min := counts[0]
