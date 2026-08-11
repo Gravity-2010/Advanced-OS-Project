@@ -1,1 +1,19 @@
-Project2/data1gb.dat
+# Generated binary data
+*.dat
+
+# Compiled Go binaries
+Project1/main
+Project2/main_bin
+Project2/fileserver_bin
+Project2/worker_bin
+
+# Project archives
+*.zip
+
+# Logs / temporary files
+*.log
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
